@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+PyPDF2
+pymongo
+nltk
+spacy
+scikit-learn
+shutil
