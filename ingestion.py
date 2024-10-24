@@ -2,6 +2,7 @@ import requests
 import os
 import json
 from utils import parse_pdf, process_document, collection
+from concurrent.futures import ThreadPoolExecutor
 
 # Load dataset.json
 with open('dataset.json') as f:
@@ -37,5 +38,15 @@ def ingest_pdfs_from_dataset(dataset):
             doc_id = collection.insert_one(metadata).inserted_id
             process_document(collection.find_one({"_id": doc_id}))
 
+def process_pdfs_concurrently():
+    docs = list(collection.find())
+    
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        executor.map(process_document, docs)
+
 if __name__ == "__main__":
-    ingest_pdfs_from_dataset(dataset)
+    try:
+        ingest_pdfs_from_dataset(dataset)
+        process_pdfs_concurrently()
+    except Exception as e:
+        print(f"Error processing PDFs: {e}")
