@@ -74,6 +74,11 @@ async def upload_pdf(file: UploadFile):
     except Exception as e:
         return {"error": str(e)}
     
+@app.get("/test-mongo")
+def test_mongo():
+    # Test fetching some data from MongoDB
+    doc_count = collection.count_documents({})
+    return {"status": "connected", "document_count": doc_count}
 
 if __name__ == "__main__":
     import uvicorn
