@@ -1,17 +1,22 @@
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, UploadFile
 from pymongo import MongoClient
 from concurrent.futures import ThreadPoolExecutor
 import os
 import PyPDF2
 import nltk
 from sklearn.feature_extraction.text import TfidfVectorizer
+from dotenv import load_dotenv
 import spacy
 import shutil
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = FastAPI()
 
 # MongoDB setup
-client = MongoClient("mongodb+srv://anwesh:Mohanty2002@cluster0.x2tup.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+mongo_uri = os.getenv("MONGODB_URI")
+client = MongoClient(mongo_uri)
 db = client['pdf_summary']
 collection = db['documents']
 
@@ -68,6 +73,7 @@ async def upload_pdf(file: UploadFile):
         return {"message": "PDF processed and stored", "document_id": str(doc_id)}
     except Exception as e:
         return {"error": str(e)}
+    
 
 if __name__ == "__main__":
     import uvicorn
