@@ -1,9 +1,8 @@
-from fastapi import FastAPI, UploadFile
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from pymongo import MongoClient
-import os
 import PyPDF2
-import math
-import shutil
+import io
+import os
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -18,21 +17,24 @@ db = client['pdf_summary']
 collection = db['documents']
 
 # Helper functions for PDF processing
-def parse_pdf(file_path):
+def parse_pdf(file):
     metadata = {
-        "document_name": os.path.basename(file_path),
-        "path": file_path,
-        "size": os.path.getsize(file_path),
+        "document_name": file.filename,
+        "size": file.file.tell(),
     }
-    with open(file_path, 'rb') as f:
-        reader = PyPDF2.PdfReader(f)
-        text = ""
-        for page_num in range(len(reader.pages)):
-            text += reader.pages[page_num].extract_text()
+    
+    # Reset file pointer to the beginning
+    file.file.seek(0)
+    
+    reader = PyPDF2.PdfReader(file.file)
+    text = ""
+    for page in reader.pages:
+        text += page.extract_text() or ""
     
     metadata["content"] = text
     return metadata
 
+# Custom summarization and keyword extraction functions
 def tokenize(text):
     sentence_endings = '.!?'
     sentences = []
@@ -49,7 +51,6 @@ def tokenize(text):
 def summarize(text, max_sentences=5):
     sentences = tokenize(text)
     return " ".join(sentences[:max_sentences])
-
 
 def compute_tf(word_dict, doc):
     tf_dict = {}
@@ -107,28 +108,16 @@ def process_document(doc):
         {"$set": {"summary": summary, "keywords": keywords}}
     )
 
-# Route to upload PDF and trigger the pipeline
+# Route to upload PDF and process it
 @app.post("/upload/")
-async def upload_pdf(file: UploadFile):
+async def upload_pdf(file: UploadFile = File(...)):
     try:
-        file_location = f"temp_pdfs/{file.filename}"
-        with open(file_location, "wb+") as f:
-            shutil.copyfileobj(file.file, f)
-        
-        metadata = parse_pdf(file_location)
+        # Parse PDF content and metadata directly from the file
+        metadata = parse_pdf(file)
         doc_id = collection.insert_one(metadata).inserted_id
         process_document(collection.find_one({"_id": doc_id}))
         
         return {"message": "PDF processed and stored", "document_id": str(doc_id)}
+    
     except Exception as e:
         return {"error": str(e)}
-    
-# @app.get("/test-mongo")
-# def test_mongo():
-#     # Test fetching some data from MongoDB
-#     doc_count = collection.count_documents({})
-#     return {"status": "connected", "document_count": doc_count}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
