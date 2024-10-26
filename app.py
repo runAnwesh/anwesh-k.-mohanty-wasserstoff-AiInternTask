@@ -1,13 +1,9 @@
 from fastapi import FastAPI, UploadFile
 from pymongo import MongoClient
-from concurrent.futures import ThreadPoolExecutor
 import os
 import PyPDF2
-import nltk
-from sklearn.feature_extraction.text import TfidfVectorizer
+import math
 from dotenv import load_dotenv
-import spacy
-import shutil
 
 # Load environment variables from .env file
 load_dotenv()
@@ -39,15 +35,70 @@ def parse_pdf(file_path):
     metadata["content"] = text
     return metadata
 
+def tokenize(text):
+    sentence_endings = '.!?'
+    sentences = []
+    current_sentence = []
+    for char in text:
+        current_sentence.append(char)
+        if char in sentence_endings:
+            sentences.append(''.join(current_sentence).strip())
+            current_sentence = []
+    if current_sentence:  # Catch any remaining sentence
+        sentences.append(''.join(current_sentence).strip())
+    return sentences
+
 def summarize(text, max_sentences=5):
-    sentences = nltk.sent_tokenize(text)
+    sentences = tokenize(text)
     return " ".join(sentences[:max_sentences])
 
-def extract_keywords(text, num_keywords=5):
-    tfidf = TfidfVectorizer(stop_words='english', max_features=num_keywords)
-    tfidf_matrix = tfidf.fit_transform([text])
-    keywords = tfidf.get_feature_names_out()
-    return keywords
+
+def compute_tf(word_dict, doc):
+    tf_dict = {}
+    doc_count = len(doc)
+    for word, count in word_dict.items():
+        tf_dict[word] = count / doc_count
+    return tf_dict
+
+def compute_idf(doc_list):
+    idf_dict = {}
+    N = len(doc_list)
+    
+    # Count the number of documents containing each word
+    for doc in doc_list:
+        for word in doc:
+            if word in idf_dict:
+                idf_dict[word] += 1
+            else:
+                idf_dict[word] = 1
+    
+    for word, count in idf_dict.items():
+        idf_dict[word] = math.log(N / float(count))
+    
+    return idf_dict
+
+def compute_tf_idf(tf, idf):
+    tf_idf = {}
+    for word, tf_val in tf.items():
+        tf_idf[word] = tf_val * idf[word]
+    return tf_idf
+
+def extract_keywords(doc, num_keywords=5):
+    word_dict = {}
+    doc_words = doc.split()
+    
+    # Word count
+    for word in doc_words:
+        word_dict[word] = word_dict.get(word, 0) + 1
+
+    # Compute TF-IDF
+    tf = compute_tf(word_dict, doc_words)
+    idf = compute_idf([doc_words])  # For simplicity, we're using only one doc context
+    tf_idf = compute_tf_idf(tf, idf)
+
+    # Sort and get top keywords
+    sorted_keywords = sorted(tf_idf.items(), key=lambda x: x[1], reverse=True)
+    return [word for word, score in sorted_keywords[:num_keywords]]
 
 def process_document(doc):
     summary = summarize(doc["content"])
