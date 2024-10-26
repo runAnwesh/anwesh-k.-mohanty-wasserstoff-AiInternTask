@@ -3,4 +3,4 @@ uvicorn
 PyPDF2
 pymongo
 python-dotenv
-
+python-multipart
