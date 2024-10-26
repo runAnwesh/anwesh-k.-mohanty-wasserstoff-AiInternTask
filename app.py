@@ -1,7 +1,7 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, background_tasks
 from pymongo import MongoClient
 import PyPDF2
-import io
+import math
 import os
 from dotenv import load_dotenv
 
@@ -16,7 +16,6 @@ client = MongoClient(mongo_uri)
 db = client['pdf_summary']
 collection = db['documents']
 
-# Helper functions for PDF processing
 def parse_pdf(file):
     metadata = {
         "document_name": file.filename,
@@ -28,11 +27,21 @@ def parse_pdf(file):
     
     reader = PyPDF2.PdfReader(file.file)
     text = ""
-    for page in reader.pages:
+    for page in reader.pages[:5]:  # Limit to first 5 pages for testing
         text += page.extract_text() or ""
     
     metadata["content"] = text
     return metadata
+
+def process_document_in_background(doc_id):
+    doc = collection.find_one({"_id": doc_id})
+    summary = summarize(doc["content"])
+    keywords = extract_keywords(doc["content"])
+    
+    collection.update_one(
+        {"_id": doc["_id"]},
+        {"$set": {"summary": summary, "keywords": keywords}}
+    )
 
 # Custom summarization and keyword extraction functions
 def tokenize(text):
@@ -82,7 +91,7 @@ def compute_tf_idf(tf, idf):
         tf_idf[word] = tf_val * idf[word]
     return tf_idf
 
-def extract_keywords(doc, num_keywords=5):
+def extract_keywords(doc, num_keywords=3):
     word_dict = {}
     doc_words = doc.split()
     
@@ -115,7 +124,9 @@ async def upload_pdf(file: UploadFile = File(...)):
         # Parse PDF content and metadata directly from the file
         metadata = parse_pdf(file)
         doc_id = collection.insert_one(metadata).inserted_id
-        process_document(collection.find_one({"_id": doc_id}))
+
+        # Run document processing in the background
+        background_tasks.add_task(process_document_in_background, doc_id)
         
         return {"message": "PDF processed and stored", "document_id": str(doc_id)}
     
