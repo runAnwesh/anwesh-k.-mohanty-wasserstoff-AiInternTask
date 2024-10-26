@@ -3,6 +3,7 @@ from pymongo import MongoClient
 import os
 import PyPDF2
 import math
+import shutil
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -15,9 +16,6 @@ mongo_uri = os.getenv("MONGODB_URI")
 client = MongoClient(mongo_uri)
 db = client['pdf_summary']
 collection = db['documents']
-
-nlp = spacy.load("en_core_web_sm")
-nltk.download('punkt')
 
 # Helper functions for PDF processing
 def parse_pdf(file_path):
@@ -125,11 +123,11 @@ async def upload_pdf(file: UploadFile):
     except Exception as e:
         return {"error": str(e)}
     
-@app.get("/test-mongo")
-def test_mongo():
-    # Test fetching some data from MongoDB
-    doc_count = collection.count_documents({})
-    return {"status": "connected", "document_count": doc_count}
+# @app.get("/test-mongo")
+# def test_mongo():
+#     # Test fetching some data from MongoDB
+#     doc_count = collection.count_documents({})
+#     return {"status": "connected", "document_count": doc_count}
 
 if __name__ == "__main__":
     import uvicorn
