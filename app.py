@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, background_tasks
+from fastapi import FastAPI, UploadFile, File, BackgroundTasks
 from pymongo import MongoClient
 import PyPDF2
 import math
@@ -119,7 +119,7 @@ def process_document(doc):
 
 # Route to upload PDF and process it
 @app.post("/upload/")
-async def upload_pdf(file: UploadFile = File(...)):
+async def upload_pdf(file: UploadFile = File(...), background_tasks: BackgroundTasks = BackgroundTasks()):
     try:
         # Parse PDF content and metadata directly from the file
         metadata = parse_pdf(file)
